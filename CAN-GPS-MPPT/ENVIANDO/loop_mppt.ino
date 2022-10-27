@@ -28,6 +28,8 @@ void loop_mppt()
         Serial.print("Tensão da bateria: "); 
         Serial.print(atof(tensaobateria));
         Serial.println("V");
+///////////////////
+
      }
 
      else if (label == "VPV")        //TENSÃO DO PAINEL                    
