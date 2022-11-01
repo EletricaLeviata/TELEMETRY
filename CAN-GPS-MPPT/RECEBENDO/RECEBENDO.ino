@@ -23,14 +23,26 @@
 #define CS 5
 ///////////////////////////////////////////////////////
 //display
+#include <TinyGPS.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 //Inicializa o display no endereco 0x27
 LiquidCrystal_I2C lcd(0x27,20,4);
 ////////////////////////////////////////////////////////
+
+
+TinyGPS gps;
+long lat;
+long lon;
+unsigned long fix_age;
+int DEG;
+int MIN1;
+int MIN2;
+int C;
+
+/////////////////////////////////////////////////////////
+
 struct can_frame canMsg;
-
-
 MCP2515 mcp2515(CS);
 
 String x;
@@ -51,8 +63,65 @@ float f = 0.0;
 float g = 0.0;
 float h = 0.0;
 
+//////////////////////////////////////////
+
+void LAT()
+{
+ DEG = lat / 1000000;
+ MIN1 = (lat / 10000) % 100;
+ MIN2 = lat % 10000;
+ lcd.setCursor (0,0);
+ 
+ Serial.print("LAT:");
+ Serial.print(DEG);
+ Serial.print(0xDF);
+ Serial.print(MIN1);
+ Serial.print(".");
+ Serial.print(MIN2);
+ Serial.print("' ");
+ 
+ lcd.print("LAT:");
+ lcd.print(DEG);
+ lcd.write(0xDF);
+ lcd.print(MIN1);
+ lcd.print(".");
+ lcd.print(MIN2);
+ lcd.print("' ");
+}
+//
+// ************ routine di esposizione della longitudine (in gradi decimali) ***********
+//
+void LON()
+{
+ DEG = lon / 1000000;
+ MIN1 = (lon / 10000) % 100;
+ MIN2 = lon % 10000;
+ lcd.setCursor(0, 1);
+ lcd.print("LON:");
+ lcd.print(DEG);
+ lcd.write(0xDF);
+ lcd.print(MIN1);
+ lcd.print(".");
+ lcd.print(MIN2);
+ lcd.print("' ");
+
+ 
+ Serial.print("LON:");
+ Serial.print(DEG);
+ Serial.print(0xDF);
+ Serial.print(MIN1);
+ Serial.print(".");
+ Serial.print(MIN2);
+ Serial.print("' ");
+ 
+}
+
+//////////////////////////////////////////
+
 void setup() {
+  
   lcd.init();
+  lcd.backlight();
   Serial.begin(9600);
   
   mcp2515.reset();
@@ -63,8 +132,22 @@ void setup() {
 }
 
 void loop() {
-
-
+  /////////////////////////////////////////////////////////////
+  //GPS
+ while (Serial.available()){
+  digitalWrite (13, HIGH);
+  C = Serial.read(); 
+  if (gps.encode(C)) 
+  {
+  }
+ }
+ digitalWrite (13, LOW);
+ gps.get_position(&lat, &lon, &fix_age);
+ LAT(); 
+ LON(); 
+ 
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//CAN
    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
     //Serial.print(canMsg.can_id); // print ID
     if (canMsg.can_id  == 36){
@@ -132,7 +215,6 @@ void loop() {
 
 //////////////////////////////
 //DISPLAY PRINT
-/////////////////////////////
   lcd.setBacklight(HIGH);
   lcd.setCursor(0,0);
   lcd.print("B.CORRENTE: ");
