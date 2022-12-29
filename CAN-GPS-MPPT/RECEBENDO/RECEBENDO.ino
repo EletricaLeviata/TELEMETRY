@@ -1,23 +1,25 @@
-// DISPLAY -> ARDUINO MEGA
-//GND      -> GND
-//VCC      -> 5V
-//SDA      -> SDA 21
-//SCL      -> SCL 22
-
-/*MCP2515     ESP32
- *INT         D15 
+/* 
+// MCP2515     ESP32
+ +*INT         D15 
  *SCK         D18 
  *SI          D23 
  *SO          D19
  *GND         GND
  *VCC         3V3
 
- *GPS(PIN)  -    ESP32(PIN)      //    LCD     -     ESP32(PIN)
+  GPS(PIN)  -    ESP32(PIN)      //    LCD     -     ESP32(PIN)
  *V         -    3V3             //    GND     -     GND
  *T         -    RX0             //    VCC     -     5V
  *R         -    TX0             //    SDA     -     GPIO 21
  *G         -    GND             //    SCL     -     GPIO 22
+ *
+// VOLTÍMETRO (VN,GND)
 */
+//CONFIGURAÇÃO MILLIS
+long previousMillis = 0;        // Variável de controle do tempo
+long redLedInterval = 900;     // Tempo em ms do intervalo a ser executado
+
+
 #include <SPI.h>
 #include <mcp2515.h>
 #define CS 5
@@ -78,7 +80,7 @@ void LAT()
  Serial.print(MIN1);
  Serial.print(".");
  Serial.print(MIN2);
- Serial.print("' ");
+ Serial.println("' ");
  
  lcd.print("LAT:");
  lcd.print(DEG);
@@ -88,9 +90,20 @@ void LAT()
  lcd.print(MIN2);
  lcd.print("' ");
 }
-//
-// ************ routine di esposizione della longitudine (in gradi decimali) ***********
-//
+///////////////
+//BATERIA
+
+byte i = 0;                                  //  Variável para usar no for
+float accuml = 0.0;            //  Variável para guardar o valor acumulado da temperatura
+int analogInput = 36;
+float vout = 0.0;
+float vin = 0.0;
+float R1 = 100000.0; // resistência de R1 (100K)
+float R2 = 10000.0; // resistência de R2 (10K)
+int value = 0;
+/////////////
+
+
 void LON()
 {
  DEG = lon / 1000000;
@@ -113,12 +126,13 @@ void LON()
  Serial.print(".");
  Serial.print(MIN2);
  Serial.print("' ");
- 
-}
+ }
+
 
 //////////////////////////////////////////
 
 void setup() {
+  pinMode(analogInput, INPUT);
   
   lcd.init();
   lcd.backlight();
@@ -129,64 +143,77 @@ void setup() {
   mcp2515.setNormalMode();
   
   Serial.println("------- CAN Read ----------");
+
 }
 
+
 void loop() {
+/*
+  //////////////////
+  //BATERIA SECUNDARIO
+  value = analogRead(analogInput);
+  vout = (value *3.7) / 4095.0; // see text
+  vin = vout / (R2 / (R1 + R2));
+  if (vin < 0.3) {
+    vin = 0.0; // declaração para anular a leitura indesejada!
+  }
+
+  for ( i = 0; i < 10; i++)
+  {
+    vin = vout / (R2 / (R1 + R2)) ;
+    //Serial.println(vin);
+    accuml = accuml + vin;
+    //delay(10);
+  }
+  vin = accuml / 10;
+  Serial.println(vin);
+  accuml = 0;
+*/
   /////////////////////////////////////////////////////////////
   //GPS
  while (Serial.available()){
   digitalWrite (13, HIGH);
   C = Serial.read(); 
-  if (gps.encode(C)) 
-  {
-  }
+  if (gps.encode(C)){}
  }
  digitalWrite (13, LOW);
  gps.get_position(&lat, &lon, &fix_age);
- LAT(); 
- LON(); 
- 
+ unsigned long currentMillis = millis();    //Tempo atual em ms
+
+  if (currentMillis - previousMillis > redLedInterval) {
+    previousMillis = currentMillis;
+ //LAT(); 
+ //LON(); 
+ }
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 //CAN
    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-    //Serial.print(canMsg.can_id); // print ID
+   
     if (canMsg.can_id  == 36){
-      
-     
-      Serial.print("PRIMEIRA MSG: ");
-
+      Serial.print("CORRENTE DA BATERIA MPPT: ");
       x = String((canMsg.data[0]))+String((canMsg.data[1]))+String((canMsg.data[2]));
       a = x.toFloat();
       Serial.println(a/10);
-
+      Serial.print("TENSÃO DA BATERIA MPPT: ");
       y = String((canMsg.data[3]))+String((canMsg.data[4]))+String((canMsg.data[5]));
       b = y.toFloat();
       Serial.println(b/10);
-
     }
+    
     if (canMsg.can_id  == 51){
-      
-      Serial.print("SEGUNDA MSG: ");
-      /*Serial.print(canMsg.data[0]);
-      Serial.print(canMsg.data[1]);
-      Serial.print(canMsg.data[2]);
-      Serial.print(canMsg.data[3]);
-      Serial.print(canMsg.data[4]);
-      Serial.println(canMsg.data[5]);
-*/
+      Serial.print("POTENCIA DO PAINEL MPPT: ");
       l = String((canMsg.data[0]))+String((canMsg.data[1]))+String((canMsg.data[2]));
       c = l.toFloat();
       Serial.println(c/10);
-/*
+      Serial.print("TENSÃO PAINEL MPPT: ");
       m = String((canMsg.data[3]))+String((canMsg.data[4]))+String((canMsg.data[5]));
       d = m.toFloat();
       Serial.println(d/10);
-      */
+      Serial.println("-----------------------------------");
     }
+    /*
     if (canMsg.can_id  == 12){
-      
       Serial.print("CORRENTE BATERIA: ");
-
       n = String((canMsg.data[0]))+String((canMsg.data[1]))+String((canMsg.data[2]));
       e = n.toFloat();
       Serial.print(e/10);
@@ -212,24 +239,7 @@ void loop() {
       Serial.print(h/10);
       Serial.print(" V");     
     }
-
-//////////////////////////////
-//DISPLAY PRINT
-  lcd.setBacklight(HIGH);
-  lcd.setCursor(0,0);
-  lcd.print("B.CORRENTE: ");
-  lcd.print(e/10);
-  lcd.setCursor(0,1);
-  lcd.print("B.TENSAO: ");
-  lcd.print(f/10);
-  lcd.setCursor(0,2);
-  lcd.print("P.POTENCIA: ");
-  lcd.print(g/10);
-  lcd.setCursor(0,3);
-  lcd.print("P.TENSAO: ");
-  lcd.print(h/10);
-    
+*/
   }    
-  Serial.println(" ");
-  delay(10);
+  //delay(100);
   }
